@@ -4,6 +4,11 @@ import matplotlib.pyplot as plt
 from matplotlib.ticker import MaxNLocator
 from cycler import cycler
 
+# 全局默认字体
+mpl.rcParams['font.family'] = 'Times New Roman'
+mpl.rcParams['mathtext.fontset'] = 'stix'
+
+
 def make_standard_figure(
     figsize=(6, 12),         # 宽, 高（英寸）
     grid=False,              # 是否显示网格线（1 pt）
