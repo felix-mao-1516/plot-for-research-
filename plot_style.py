@@ -117,3 +117,14 @@ def make_standard_figure(
     if return_legend_placer:
         return fig, ax, _place_legend
     return fig, ax
+
+def save_figure(fig=None, path='figure.png', dpi=300, transparent=False, tight=True, pad=0.05):
+    """
+    保存当前图或指定 fig 到 path。格式由扩展名决定:.png / .pdf / .svg ...
+    """
+    if fig is None:
+        fig = plt.gcf()
+    kwargs = {'dpi': dpi, 'transparent': transparent}
+    if tight:
+        kwargs.update({'bbox_inches': 'tight', 'pad_inches': pad})
+    fig.savefig(path, **kwargs)
