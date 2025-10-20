@@ -88,8 +88,8 @@ def make_standard_figure(
 
     # Hide top/right spines (outer box), bold bottom/left
     # (Fix: set_visible should take booleans)
-    ax.spines['top'].set_visible(False)
-    ax.spines['right'].set_visible(False)
+    ax.spines['top'].set_visible(2.0) #False
+    ax.spines['right'].set_visible(2.0)
     ax.spines['bottom'].set_linewidth(2.0)
     ax.spines['left'].set_linewidth(2.0)
 
@@ -237,17 +237,18 @@ def plot_depth_profiles_in_window(
     stamps_index: Optional[pd.DatetimeIndex] = None,
     depth_unit: str = "ft",
     strain_unit: str = "(strain)",
-    invert_depth_axis: bool = True,
+    invert_depth_axis: bool = False,
     figsize: Tuple[float, float] = (6, 12),
     grid: bool = False,
     ax: Optional[plt.Axes] = None,
-    color_cycle=('k', 'r', 'b', 'g', 'm', 'c', 'y'),
+    color_cycle=( 'b', 'g', 'm', 'c', 'y'),#'k', 'r',
     legend: Union[bool, str] = True,
     title: Optional[str] = None,
+    show=False,
 ) -> Tuple[plt.Figure, plt.Axes]:
     """
-    Plot strain-vs-depth profiles inside a real depth window [depth_min, depth_max]
-    for one or multiple times (each time -> one curve).
+    Plot *depth on x-axis* vs *strain on y-axis* profiles inside a real depth window
+    [depth_min, depth_max] for one or multiple times (each time -> one curve).
 
     Parameters
     ----------
@@ -264,7 +265,7 @@ def plot_depth_profiles_in_window(
     depth_unit, strain_unit : str
         Axis labels units.
     invert_depth_axis : bool
-        If True, shallow at top (井口在上).
+        If True, invert the *x-axis* (depth), so shallow appears on the left.
     figsize, grid, color_cycle, legend :
         Passed to make_standard_figure if ax is None.
     ax : matplotlib.axes.Axes | None
@@ -304,7 +305,7 @@ def plot_depth_profiles_in_window(
     else:
         fig = ax.figure
 
-    # Plot each profile
+    # Plot each profile: x = depth, y = strain
     for r in row_idx:
         prof = X[r, col_idx]  # h5py.Dataset slicing-friendly
 
@@ -313,23 +314,145 @@ def plot_depth_profiles_in_window(
         else:
             base_label = f"row {r}"
 
-        ax.plot(prof, Dwin, label=base_label)
+        ax.plot(Dwin, prof, label=base_label)
 
     # Labels & title
-    ax.set_xlabel(f"Strain {strain_unit}")
-    ax.set_ylabel(f"Depth [{depth_unit}]")
-    if title is None:
+    ax.set_xlabel(f"Depth [{depth_unit}]")
+    ax.set_ylabel(f"Strain {strain_unit}")
+    if title == "auto":
         title = f"Depth profiles: [{depth_min}, {depth_max}] {depth_unit}"
     ax.set_title(title)
 
-    # Depth orientation
+    # Depth orientation (now along x-axis)
     if invert_depth_axis:
-        ax.invert_yaxis()
+        ax.invert_xaxis()
+    # === 新增：自动刷新图例，确保收集到全部曲线 ===
+    if legend in (True, 'auto'):
+        handles, labels = ax.get_legend_handles_labels()
+        if handles:
+            ax.legend(handles, labels, loc='best')
 
-    if created:
+    if created and show:
         plt.show()
 
     return fig, ax
+
+def plot_dual_axis_depth_profile(
+    dstrain_left, depth_left, times_left,
+    dstrain_right, depth_right, times_right,
+    *,
+    depth_window_left: Tuple[float, float],
+    depth_window_right: Tuple[float, float],
+    stamps_index_left: Optional[pd.DatetimeIndex] = None,
+    stamps_index_right: Optional[pd.DatetimeIndex] = None,
+    depth_unit: str = "ft",
+    strain_unit_left: str = "(strain)",
+    strain_unit_right: str = "(strain)",
+    strain_scale_left: float = 1.0,
+    strain_scale_right: float = 1.0,
+    invert_left_y: bool = False,
+    invert_right_y: bool = False,
+    xlim: Optional[Tuple[float, float]] = None,
+    figsize: Tuple[float, float] = (12, 6),
+    grid: bool = True,
+    color_cycle=('r', 'b', 'g', 'm', 'c', 'y'),
+    labels: Tuple[str, str] = ("Series A", "Series B"),
+    title: Optional[str] = None,
+) -> Tuple[plt.Figure, plt.Axes, plt.Axes]:
+    fig, ax = make_standard_figure(figsize=figsize, grid=grid, color_cycle=color_cycle, legend=False)
+    ax_r = ax.twinx()
+
+    def _next_color(the_ax):
+        # 先试专用方法（兼容大多数版本）
+        if hasattr(the_ax, "_get_lines") and hasattr(the_ax._get_lines, "get_next_color"):
+            return the_ax._get_lines.get_next_color()
+        # 兜底：从 rcParams 里取颜色表，按当前已画线条数轮询
+        colors = plt.rcParams.get('axes.prop_cycle', cycler(color=['C0'])).by_key().get('color', ['C0'])
+        return colors[len(the_ax.get_lines()) % len(colors)]
+    
+    # === 方案A：固定左右两条线使用不同颜色 ===
+    colors = mpl.rcParams.get('axes.prop_cycle', cycler(color=['C0', 'C1'])).by_key().get('color', ['C0', 'C1'])
+    left_color  = colors[0]
+    right_color = colors[1 if len(colors) > 1 else 0]
+
+    # LEFT
+    D1 = _as_1d(depth_left)
+    X1 = _to_numpy(dstrain_left)
+    Nt1, Nz1 = X1.shape
+    dmin1, dmax1 = depth_window_left
+    if dmin1 > dmax1:
+        dmin1, dmax1 = dmax1, dmin1
+    mask1 = (D1 >= dmin1) & (D1 <= dmax1)
+    if not np.any(mask1):
+        raise ValueError("Left series: no depth samples in the requested window.")
+    col1 = np.where(mask1)[0]
+    D1w = D1[col1]
+    rows1 = _normalize_times_to_row_indices(times_left, Nt1, stamps_index_left)
+
+    # color_left = _next_color(ax)
+    for r in rows1:
+        prof = X1[r, col1] * float(strain_scale_left)
+        if stamps_index_left is not None:
+            tlabel = pd.to_datetime(stamps_index_left[r]).strftime("%Y-%m-%d %H:%M:%S")
+        else:
+            tlabel = f"row {r}"
+        ax.plot(D1w, prof, label=f"{labels[0]} @ {tlabel}", color=left_color)
+
+    ax.set_xlabel(f"Depth [{depth_unit}]")
+    ax.set_ylabel(f"Strain {strain_unit_left}", color=left_color)
+    ax.tick_params(axis='y', labelcolor=left_color)
+
+    # RIGHT
+    D2 = _as_1d(depth_right)
+    X2 = _to_numpy(dstrain_right)
+    Nt2, Nz2 = X2.shape
+    dmin2, dmax2 = depth_window_right
+    if dmin2 > dmax2:
+        dmin2, dmax2 = dmax2, dmin2
+    mask2 = (D2 >= dmin2) & (D2 <= dmax2)
+    if not np.any(mask2):
+        raise ValueError("Right series: no depth samples in the requested window.")
+    col2 = np.where(mask2)[0]
+    D2w = D2[col2]
+    rows2 = _normalize_times_to_row_indices(times_right, Nt2, stamps_index_right)
+
+    # color_right = _next_color(ax_r)
+    for r in rows2:
+        prof = X2[r, col2] * float(strain_scale_right)
+        if stamps_index_right is not None:
+            tlabel = pd.to_datetime(stamps_index_right[r]).strftime("%Y-%m-%d %H:%M:%S")
+        else:
+            tlabel = f"row {r}"
+        ax_r.plot(D2w, prof, label=f"{labels[1]} @ {tlabel}", color=right_color, linestyle='--')
+
+    ax_r.set_ylabel(f"Strain {strain_unit_right}", color=right_color)
+    ax_r.tick_params(axis='y', labelcolor=right_color)
+
+    # X limits
+    if xlim is None:
+        xmin = min(dmin1, dmin2)
+        xmax = max(dmax1, dmax2)
+        xlim = (xmin, xmax)
+    ax.set_xlim(*xlim)
+
+    # Y inversions
+    if invert_left_y:
+        ax.invert_yaxis()
+    if invert_right_y:
+        ax_r.invert_yaxis()
+
+    # Title
+    if title  =="auto":
+        title = "Depth profiles with dual strain axes"
+    ax.set_title(title)
+
+    # Combined legend
+    h1, l1 = ax.get_legend_handles_labels()
+    h2, l2 = ax_r.get_legend_handles_labels()
+    if h1 or h2:
+        ax.legend(h1 + h2, l1 + l2, loc='upper right')
+
+    return fig, ax, ax_r
 
 
 # --------------------------
@@ -359,3 +482,28 @@ if __name__ == "__main__":
         stamps_index=stamps_index, depth_unit="ft", strain_unit="(a.u.)",
         grid=True
     )
+
+if __name__ == "__main__":
+    # Quick synthetic test
+    Nt, Nz = 120, 600
+    z  = np.linspace(10000, 20000, Nz)
+    z2 = np.linspace(11000, 18000, Nz)
+    t = np.arange(Nt)
+    data1 = np.sin((z[None, :]  / 900) + (t[:, None] / 10.0))
+    data2 = 0.5*np.cos((z2[None, :] / 700) + (t[:, None] / 11.0))
+
+    fig, ax, axr = plot_dual_axis_depth_profile(
+        dstrain_left=data1, depth_left=z,  times_left=[5],
+        dstrain_right=data2, depth_right=z2, times_right=[30],
+        depth_window_left=(12000, 18000),
+        depth_window_right=(12000, 16000),
+        depth_unit="ft",
+        strain_unit_left="(a.u.)",
+        strain_unit_right="(a.u.)",
+        xlim=(12000, 18000),
+        invert_left_y=False,
+        invert_right_y=False,
+        labels=("Left series", "Right series"),
+        figsize=(12,6)
+    )
+    plt.show()
