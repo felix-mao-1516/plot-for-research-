@@ -27,6 +27,7 @@ from matplotlib.ticker import MaxNLocator
 from cycler import cycler
 import pandas as pd
 from typing import Optional, Sequence, Union, Tuple, List
+import matplotlib.dates as mdates
 
 # ----------------------
 # Global default fonts
@@ -38,7 +39,7 @@ mpl.rcParams['mathtext.fontset'] = 'stix'
 def make_standard_figure(
     figsize=(6, 12),         # width, height (inches)
     grid=False,              # show grid (1 pt)
-    color_cycle=('k', 'r', 'b', 'g', 'm', 'c', 'y'),
+    color_cycle=( 'r', 'b', 'g', 'm', 'c', 'y', 'k'),
     legend=True,             # place legend (upper-right, equal margins)
     legend_border_pad=0.5,   # padding to axes box (in font-size units)
     nbins=7,                 # aim for 5–7 major ticks (min_n_ticks=5)
@@ -453,6 +454,168 @@ def plot_dual_axis_depth_profile(
         ax.legend(h1 + h2, l1 + l2, loc='upper right')
 
     return fig, ax, ax_r
+
+
+# ========================= NEW: strain vs time utilities =========================
+def _nearest_rows_for_window(time_window, stamps_index, nrows: int):
+    """
+    把时间窗口转为行号 slice。
+    time_window:
+      - None: 全部
+      - (int_start, int_end): 行号（含端点）
+      - (str/datetime, str/datetime): 时间戳（含端点，按“最近邻”匹配；允许重复/NaT）
+    """
+    if time_window is None:
+        return slice(None)
+
+    # 行号窗口
+    if isinstance(time_window[0], (int, np.integer)):
+        a, b = int(time_window[0]), int(time_window[1])
+        if a > b:
+            a, b = b, a
+        a = max(0, a)
+        b = min(nrows - 1, b)
+        return slice(a, b + 1)
+
+    # 时间戳窗口
+    if stamps_index is None:
+        raise ValueError("给了时间字符串窗口，但未提供 stamps_index。")
+
+    # 稳健“最近邻”（允许 stamps_index 重复或包含 NaT）
+    idx_ns = stamps_index.asi8  # int64 ns; NaT 为最小 int64
+    valid_mask = idx_ns != np.iinfo(np.int64).min
+    if not valid_mask.any():
+        raise ValueError("stamps_index 全是 NaT，无法匹配时间。")
+
+    valid_pos = np.where(valid_mask)[0]
+    idx_ns_valid = idx_ns[valid_mask]
+
+    t0 = np.int64(pd.Timestamp(time_window[0]).value)
+    t1 = np.int64(pd.Timestamp(time_window[1]).value)
+    if t0 > t1:
+        t0, t1 = t1, t0
+
+    i0 = int(valid_pos[np.argmin(np.abs(idx_ns_valid - t0))])
+    i1 = int(valid_pos[np.argmin(np.abs(idx_ns_valid - t1))])
+    if i0 > i1:
+        i0, i1 = i1, i0
+    return slice(i0, i1 + 1)
+
+
+def plot_strain_vs_time_at_depths(
+    dstrain, depth,
+    *,
+    stamps_index=None,                     # 若要横轴显示时间，建议传入 DatetimeIndex
+    target_depths=None,                    # 例如 [12000, 15000]：按最近列或窗口聚合
+    depth_tolerance=None,                  # 例如 25（表示 ±25 ft 聚合窗口）
+    reducer="mean",                        # 'mean' 或 'median'（用于窗口/区间聚合）
+    depth_windows=None,                    # 例如 [(11950,12050), (15950,16050)]：区间聚合
+    time_window=None,                      # None 或 (start, end): 可填行号或时间字符串
+    scale=1.0,                             # y 轴缩放（如 1e6 -> microstrain）
+    depth_unit="ft", strain_unit="(microstrain)",
+    time_format='%m/%d/%Y\n %H:%M:%S',
+    time_tick_rotation=0,
+    figsize=(12, 6), grid=True, legend='auto',
+    legend_labels=None,                    # 可选：自定义图例文本列表（覆盖默认）
+    ax=None, show=False                    # 跟你现有风格统一：默认不 plt.show()
+):
+    """
+    在给定的一个/多个深度位置处，绘制 strain vs time。
+    - 若提供 target_depths：
+        * depth_tolerance is None/0 -> 每个深度取“最近列”
+        * depth_tolerance>0         -> 对每个深度的 ±tol 窗口内列做聚合
+    - 或者提供 depth_windows：对每个 (zmin,zmax) 区间聚合
+    """
+    D = _as_1d(depth)
+    X = _to_numpy(dstrain)
+    Nt, Nz = X.shape
+
+    # 时间窗口 -> 行 slice
+    rs = _nearest_rows_for_window(time_window, stamps_index, Nt)
+
+    created = False
+    if ax is None:
+        # 复用你已有的统一风格
+        fig, ax = make_standard_figure(figsize=figsize, grid=grid, legend=legend)
+        created = True
+    else:
+        fig = ax.figure
+
+    def _reduce_cols(Y2d):
+        if Y2d.ndim == 1:
+            return Y2d
+        if reducer == "median":
+            return np.nanmedian(Y2d, axis=1)
+        return np.nanmean(Y2d, axis=1)
+
+    # 1) 按 target_depths（点或小窗口）
+    if target_depths is not None:
+        for zt in list(target_depths):
+            if not depth_tolerance:
+                # 最近列
+                j = int(np.argmin(np.abs(D - zt)))
+                Y = X[rs, j] * float(scale)
+                lbl = f"{zt:g} {depth_unit} (nearest {D[j]:.1f})"
+            else:
+                mask = np.abs(D - zt) <= float(depth_tolerance)
+                cols = np.where(mask)[0]
+                if cols.size == 0:
+                    # 无列命中 -> 退化到最近列
+                    j = int(np.argmin(np.abs(D - zt)))
+                    Y = X[rs, j] * float(scale)
+                    lbl = f"{zt:g}±{depth_tolerance:g} {depth_unit} (fallback {D[j]:.1f})"
+                else:
+                    Y = _reduce_cols(X[rs, :][:, cols]) * float(scale)
+                    lbl = f"{zt:g}±{depth_tolerance:g} {depth_unit} ({reducer})"
+
+            if stamps_index is not None:
+                ax.plot(stamps_index[rs], Y, label=lbl)
+            else:
+                ax.plot(np.arange(Nt)[rs], Y, label=lbl)
+
+    # 2) 按 depth_windows（区间聚合）
+    if depth_windows is not None:
+        for (zmin, zmax) in depth_windows:
+            if zmin > zmax:
+                zmin, zmax = zmax, zmin
+            mask = (D >= zmin) & (D <= zmax)
+            cols = np.where(mask)[0]
+            if cols.size == 0:
+                continue
+            Y = _reduce_cols(X[rs, :][:, cols]) * float(scale)
+            lbl = f"[{zmin:g}, {zmax:g}] {depth_unit} ({reducer})"
+            if stamps_index is not None:
+                ax.plot(stamps_index[rs], Y, label=lbl)
+            else:
+                ax.plot(np.arange(Nt)[rs], Y, label=lbl)
+
+    # 轴标签
+    ax.set_ylabel(r'Strain change, $\mu\varepsilon$')
+    ax.set_xlabel("Time" if stamps_index is not None else "Time (row index)")
+
+    if stamps_index is not None and time_format:
+        ax.xaxis.set_major_locator(mdates.AutoDateLocator())
+        ax.xaxis.set_major_formatter(mdates.DateFormatter(time_format))
+        ha = 'center' if time_tick_rotation % 360 == 0 else 'right'
+        for lab in ax.get_xticklabels():
+            lab.set_rotation(time_tick_rotation)
+            lab.set_rotation_mode('anchor')   # 锚点固定在刻度位置
+            lab.set_horizontalalignment(ha)
+
+
+    # 自动刷新图例（含 legend='auto' 的情况）
+    if legend in (True, 'auto'):
+        handles, labels = ax.get_legend_handles_labels()
+        if handles:
+            if legend_labels is not None:
+                ax.legend(handles, legend_labels, loc='best')
+            else:
+                ax.legend(handles, labels, loc='best')
+
+    if created and show:
+        plt.show()
+
+    return fig, ax
 
 
 # --------------------------
