@@ -319,7 +319,7 @@ def plot_depth_profiles_in_window(
 
     # Labels & title
     ax.set_xlabel(f"Depth [{depth_unit}]")
-    ax.set_ylabel(f"Strain {strain_unit}")
+    ax.set_ylabel(f"Strain change, {strain_unit}")
     if title == "auto":
         title = f"Depth profiles: [{depth_min}, {depth_max}] {depth_unit}"
     ax.set_title(title)
