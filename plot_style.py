@@ -62,6 +62,10 @@ def make_standard_figure(
         mpl.rcParams.update({
             # Fonts & sizes
             'font.family': 'Times New Roman',
+            'font.serif': ['Times New Roman', 'Times', 'STIXGeneral'],
+            'mathtext.fontset': 'stix',     
+            'axes.unicode_minus': False,
+            
             'axes.labelsize': 20,
             'axes.labelweight': 'bold',
             'xtick.labelsize': 20,
