@@ -39,7 +39,28 @@ mpl.rcParams['mathtext.fontset'] = 'stix'
 def make_standard_figure(
     figsize=(6, 12),         # width, height (inches)
     grid=False,              # show grid (1 pt)
-    color_cycle=( 'r', 'b', 'g', 'm', 'c', 'y', 'k'),
+    color_cycle=(
+        "#1f77b4",  # 蓝
+        "#ff7f0e",  # 橙
+        "#2ca02c",  # 绿
+        "#d62728",  # 红
+        "#9467bd",  # 紫
+        "#8c564b",  # 棕
+        "#e377c2",  # 粉
+        "#7f7f7f",  # 灰
+        "#bcbd22",  # 橄榄绿
+        "#17becf",  # 青
+        "#393b79",  # 深蓝
+        "#637939",  # 深绿
+        "#8c6d31",  # 赭色
+        "#843c39",  # 深红棕
+        "#7b4173",  # 深紫
+        "#3182bd",  # 天蓝
+        "#e6550d",  # 深橙
+        "#31a354",  # 正绿
+        "#756bb1",  # 淡紫
+        "#636363",  # 深灰
+    ),
     legend=True,             # place legend (upper-right, equal margins)
     legend_border_pad=0.5,   # padding to axes box (in font-size units)
     nbins=7,                 # aim for 5–7 major ticks (min_n_ticks=5)
@@ -66,10 +87,10 @@ def make_standard_figure(
             'mathtext.fontset': 'stix',     
             'axes.unicode_minus': False,
             
-            'axes.labelsize': 20,
+            'axes.labelsize': 24,
             'axes.labelweight': 'bold',
-            'xtick.labelsize': 20,
-            'ytick.labelsize': 20,
+            'xtick.labelsize': 24,
+            'ytick.labelsize': 24,
             'legend.fontsize': 20,
 
             # Lines & color cycle
