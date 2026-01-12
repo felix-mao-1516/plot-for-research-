@@ -1,0 +1,12 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "jin-pylib"
+version = "0.0.0"
+description = "Local utilities"
+requires-python = ">=3.9"
+
+[tool.setuptools]
+packages = ["jin_pylib"]
