@@ -425,7 +425,7 @@ def plot_dual_axis_depth_profile(
         ax.plot(D1w, prof, label=f"{labels[0]} @ {tlabel}", color=left_color)
 
     ax.set_xlabel(f"Depth [{depth_unit}]")
-    ax.set_ylabel(f"Strain {strain_unit_left}", color=left_color)
+    ax.set_ylabel(f"Strain Change, {strain_unit_left}", color=left_color)
     ax.tick_params(axis='y', labelcolor=left_color)
 
     # RIGHT
@@ -451,7 +451,7 @@ def plot_dual_axis_depth_profile(
             tlabel = f"row {r}"
         ax_r.plot(D2w, prof, label=f"{labels[1]} @ {tlabel}", color=right_color, linestyle='--')
 
-    ax_r.set_ylabel(f"Strain {strain_unit_right}", color=right_color)
+    ax_r.set_ylabel(f"Strain Change, {strain_unit_right}", color=right_color)
     ax_r.tick_params(axis='y', labelcolor=right_color)
 
     # X limits
