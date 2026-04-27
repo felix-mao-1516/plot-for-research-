@@ -381,9 +381,12 @@ def plot_dual_axis_depth_profile(
     xlim: Optional[Tuple[float, float]] = None,
     figsize: Tuple[float, float] = (12, 6),
     grid: bool = True,
-    color_cycle=('r', 'b', 'g', 'm', 'c', 'y'),
+    color_cycle=('r', 'g','b', 'g', 'm', 'c', 'y'),
     labels: Tuple[str, str] = ("Series A", "Series B"),
     title: Optional[str] = None,
+    show_time_in_label: bool = False,   # ← 新增，默认不显示时间
+    left_color: Optional[str] = None,      # 新增
+    right_color: Optional[str] = None,     # 新增
 ) -> Tuple[plt.Figure, plt.Axes, plt.Axes]:
     fig, ax = make_standard_figure(figsize=figsize, grid=grid, color_cycle=color_cycle, legend=False)
     ax_r = ax.twinx()
@@ -395,11 +398,15 @@ def plot_dual_axis_depth_profile(
         # 兜底：从 rcParams 里取颜色表，按当前已画线条数轮询
         colors = plt.rcParams.get('axes.prop_cycle', cycler(color=['C0'])).by_key().get('color', ['C0'])
         return colors[len(the_ax.get_lines()) % len(colors)]
-    
-    # === 方案A：固定左右两条线使用不同颜色 ===
-    colors = mpl.rcParams.get('axes.prop_cycle', cycler(color=['C0', 'C1'])).by_key().get('color', ['C0', 'C1'])
-    left_color  = colors[0]
-    right_color = colors[1 if len(colors) > 1 else 0]
+
+    # === 固定左右两条线使用不同颜色 ===
+    colors = list(color_cycle) if color_cycle is not None else ['C0', 'C1']
+
+    if left_color is None:
+        left_color = colors[0] if len(colors) > 0 else 'C0'
+
+    if right_color is None:
+        right_color = colors[1] if len(colors) > 1 else left_color
 
     # LEFT
     D1 = _as_1d(depth_left)
@@ -415,16 +422,21 @@ def plot_dual_axis_depth_profile(
     D1w = D1[col1]
     rows1 = _normalize_times_to_row_indices(times_left, Nt1, stamps_index_left)
 
-    # color_left = _next_color(ax)
     for r in rows1:
         prof = X1[r, col1] * float(strain_scale_left)
-        if stamps_index_left is not None:
-            tlabel = pd.to_datetime(stamps_index_left[r]).strftime("%Y-%m-%d %H:%M:%S")
-        else:
-            tlabel = f"row {r}"
-        ax.plot(D1w, prof, label=f"{labels[0]} @ {tlabel}", color=left_color)
 
-    ax.set_xlabel(f"Depth [{depth_unit}]")
+        if show_time_in_label:
+            if stamps_index_left is not None:
+                tlabel = pd.to_datetime(stamps_index_left[r]).strftime("%Y-%m-%d %H:%M:%S")
+            else:
+                tlabel = f"row {r}"
+            label_left = f"{labels[0]} @ {tlabel}"
+        else:
+            label_left = labels[0]
+
+        ax.plot(D1w, prof, label=label_left, color=left_color)
+
+    ax.set_xlabel(f"MD, {depth_unit}")
     ax.set_ylabel(f"Strain Change, {strain_unit_left}", color=left_color)
     ax.tick_params(axis='y', labelcolor=left_color)
 
@@ -442,14 +454,19 @@ def plot_dual_axis_depth_profile(
     D2w = D2[col2]
     rows2 = _normalize_times_to_row_indices(times_right, Nt2, stamps_index_right)
 
-    # color_right = _next_color(ax_r)
     for r in rows2:
         prof = X2[r, col2] * float(strain_scale_right)
-        if stamps_index_right is not None:
-            tlabel = pd.to_datetime(stamps_index_right[r]).strftime("%Y-%m-%d %H:%M:%S")
+
+        if show_time_in_label:
+            if stamps_index_right is not None:
+                tlabel = pd.to_datetime(stamps_index_right[r]).strftime("%Y-%m-%d %H:%M:%S")
+            else:
+                tlabel = f"row {r}"
+            label_right = f"{labels[1]} @ {tlabel}"
         else:
-            tlabel = f"row {r}"
-        ax_r.plot(D2w, prof, label=f"{labels[1]} @ {tlabel}", color=right_color, linestyle='--')
+            label_right = labels[1]
+
+        ax_r.plot(D2w, prof, label=label_right, color=right_color, linestyle='-')
 
     ax_r.set_ylabel(f"Strain Change, {strain_unit_right}", color=right_color)
     ax_r.tick_params(axis='y', labelcolor=right_color)
@@ -468,7 +485,7 @@ def plot_dual_axis_depth_profile(
         ax_r.invert_yaxis()
 
     # Title
-    if title  =="auto":
+    if title == "auto":
         title = "Depth profiles with dual strain axes"
     ax.set_title(title)
 
@@ -479,7 +496,6 @@ def plot_dual_axis_depth_profile(
         ax.legend(h1 + h2, l1 + l2, loc='upper right')
 
     return fig, ax, ax_r
-
 
 # ========================= NEW: strain vs time utilities =========================
 def _nearest_rows_for_window(time_window, stamps_index, nrows: int):
