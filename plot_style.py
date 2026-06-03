@@ -493,7 +493,7 @@ def plot_dual_axis_depth_profile(
     h1, l1 = ax.get_legend_handles_labels()
     h2, l2 = ax_r.get_legend_handles_labels()
     if h1 or h2:
-        ax.legend(h1 + h2, l1 + l2, loc='upper right')
+        ax.legend(h1 + h2, l1 + l2, loc='lower left')# lower left
 
     return fig, ax, ax_r
 
