@@ -1,0 +1,16 @@
+{
+  "k_md": 0.1,
+  "phi": 0.1,
+  "ct_per_psi": 3e-06,
+  "mu_cp": 0.6,
+  "h_ft": 50.0,
+  "xf_ft": 210.0,
+  "conductivity_md_ft": 420.0,
+  "pi_psi": 4200.0,
+  "B_rb_per_stb": 1.273,
+  "n_panels": 3,
+  "control": "pressure",
+  "pwf_psi": 3000.0,
+  "total_rate_stb_day": 25.0,
+  "include_other_wing": true
+}

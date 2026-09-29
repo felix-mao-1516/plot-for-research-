@@ -1,0 +1,16 @@
+{
+  "internal_time_steps": 473,
+  "eta_ft2_hour": 146.48813688922192,
+  "Fcd": 20.0,
+  "max_scaled_linear_residual": 3.175249541133848e-16,
+  "max_center_pressure_mismatch_psi": 1.0806153545544805e-12,
+  "max_Darcy_mismatch_psi": 8.104615159158603e-13,
+  "max_continuity_relative_error": 6.303450599059993e-17,
+  "tip_rate_relative_error": 0.0,
+  "max_well_balance_relative_error": 2.521380239623997e-16,
+  "minimum_vertex_pressure_psi": 3000.0,
+  "minimum_panel_rate_STB_day": -272.304526107293,
+  "last_reverse_influx_time_h": 0.0012529566459256519,
+  "last_vertex_pressure_overshoot_time_h": 0.0024048098176054156,
+  "minimum_panel_rate_at_requested_times_STB_day": 7.594850274367863
+}
