@@ -558,6 +558,7 @@ def plot_strain_vs_time_at_depths(
     time_tick_rotation=0,
     figsize=(12, 6), grid=True, legend='auto',
     legend_labels=None,                    # 可选：自定义图例文本列表（覆盖默认）
+    show_depth_match=False,                # 调试时显示实际匹配深度和聚合方式
     ax=None, show=False                    # 跟你现有风格统一：默认不 plt.show()
 ):
     """
@@ -566,6 +567,9 @@ def plot_strain_vs_time_at_depths(
         * depth_tolerance is None/0 -> 每个深度取“最近列”
         * depth_tolerance>0         -> 对每个深度的 ±tol 窗口内列做聚合
     - 或者提供 depth_windows：对每个 (zmin,zmax) 区间聚合
+    - 默认图例只显示输入的深度/窗口；show_depth_match=True 显示 nearest、fallback 或聚合方式。
+    - legend_labels 覆盖上述标签，并绑定到本次绘制的曲线；后续 ax.legend() 仍保留自定义文本。
+      标签数量须与本次实际绘制的曲线数量一致（空 depth_windows 会跳过）。
     """
     D = _as_1d(depth)
     X = _to_numpy(dstrain)
@@ -582,6 +586,8 @@ def plot_strain_vs_time_at_depths(
     else:
         fig = ax.figure
 
+    first_line = len(ax.lines)
+
     def _reduce_cols(Y2d):
         if Y2d.ndim == 1:
             return Y2d
@@ -596,7 +602,9 @@ def plot_strain_vs_time_at_depths(
                 # 最近列
                 j = int(np.argmin(np.abs(D - zt)))
                 Y = X[rs, j] * float(scale)
-                lbl = f"{zt:g} {depth_unit} (nearest {D[j]:.1f})"
+                lbl = f"{zt:g} {depth_unit}"
+                if show_depth_match:
+                    lbl += f" (nearest {D[j]:.1f})"
             else:
                 mask = np.abs(D - zt) <= float(depth_tolerance)
                 cols = np.where(mask)[0]
@@ -604,10 +612,14 @@ def plot_strain_vs_time_at_depths(
                     # 无列命中 -> 退化到最近列
                     j = int(np.argmin(np.abs(D - zt)))
                     Y = X[rs, j] * float(scale)
-                    lbl = f"{zt:g}±{depth_tolerance:g} {depth_unit} (fallback {D[j]:.1f})"
+                    lbl = f"{zt:g}±{depth_tolerance:g} {depth_unit}"
+                    if show_depth_match:
+                        lbl += f" (fallback {D[j]:.1f})"
                 else:
                     Y = _reduce_cols(X[rs, :][:, cols]) * float(scale)
-                    lbl = f"{zt:g}±{depth_tolerance:g} {depth_unit} ({reducer})"
+                    lbl = f"{zt:g}±{depth_tolerance:g} {depth_unit}"
+                    if show_depth_match:
+                        lbl += f" ({reducer})"
 
             if stamps_index is not None:
                 ax.plot(stamps_index[rs], Y, label=lbl)
@@ -624,11 +636,21 @@ def plot_strain_vs_time_at_depths(
             if cols.size == 0:
                 continue
             Y = _reduce_cols(X[rs, :][:, cols]) * float(scale)
-            lbl = f"[{zmin:g}, {zmax:g}] {depth_unit} ({reducer})"
+            lbl = f"[{zmin:g}, {zmax:g}] {depth_unit}"
+            if show_depth_match:
+                lbl += f" ({reducer})"
             if stamps_index is not None:
                 ax.plot(stamps_index[rs], Y, label=lbl)
             else:
                 ax.plot(np.arange(Nt)[rs], Y, label=lbl)
+
+    if legend_labels is not None:
+        custom_labels = list(legend_labels)
+        plotted_lines = ax.lines[first_line:]
+        if len(custom_labels) != len(plotted_lines):
+            raise ValueError("legend_labels 数量必须与本次实际绘制的曲线数量一致。")
+        for line, label in zip(plotted_lines, custom_labels):
+            line.set_label(label)
 
     # 轴标签
     ax.set_ylabel(r'Strain change, $\mu\varepsilon$')
@@ -648,10 +670,7 @@ def plot_strain_vs_time_at_depths(
     if legend in (True, 'auto'):
         handles, labels = ax.get_legend_handles_labels()
         if handles:
-            if legend_labels is not None:
-                ax.legend(handles, legend_labels, loc='best')
-            else:
-                ax.legend(handles, labels, loc='best')
+            ax.legend(handles, labels, loc='best')
 
     if created and show:
         plt.show()
